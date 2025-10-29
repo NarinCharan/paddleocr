@@ -26,28 +26,42 @@ async def run_ocr(
     file: Optional[UploadFile] = File(None),
     file_url: Optional[str] = Form(None)
 ):
-    temp_file = None
     temp_file_path = None
     
     try:
-        if file_url:
+        # Validate that we have at least one input
+        if not file_url and (not file or not file.filename):
+            raise HTTPException(
+                status_code=400, 
+                detail="Please provide either a file upload or a file_url"
+            )
+        
+        # Get image bytes from URL
+        if file_url and file_url.strip():
             try:
                 response = requests.get(file_url, timeout=10)
                 response.raise_for_status()
                 image_bytes = response.content
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Failed to download image: {str(e)}")
-        
-        elif file:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to download image: {str(e)}"
+                )
+        # Get image bytes from uploaded file
+        elif file and file.filename:
             image_bytes = await file.read()
-        
         else:
-            raise HTTPException(status_code=400, detail="Please provide either a file or file_url")
+            raise HTTPException(
+                status_code=400, 
+                detail="Please provide either a file upload or a file_url"
+            )
         
+        # Save to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
             temp_file.write(image_bytes)
             temp_file_path = temp_file.name
         
+        # Run OCR
         try:
             result = ocr.ocr(temp_file_path, cls=True)
             
@@ -56,14 +70,21 @@ async def run_ocr(
                 "results": result
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"OCR processing failed: {str(e)}"
+            )
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Unexpected error: {str(e)}"
+        )
     
     finally:
+        # Clean up temporary file
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.unlink(temp_file_path)
