@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaddleOCR API Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: #f0f0f0;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        input[type="file"] {
+            padding: 10px;
+        }
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button[type="submit"]:hover {
+            background: #5568d3;
+        }
+        button[type="submit"]:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: none;
+        }
+        #result.show {
+            display: block;
+        }
+        .result-header {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .success {
+            border-left: 4px solid #10b981;
+        }
+        .error {
+            border-left: 4px solid #ef4444;
+        }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .loading.show {
+            display: block;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 PaddleOCR API Test</h1>
+        <p class="subtitle">Test your OCR API with image URLs or file uploads</p>
+
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="switchTab('url')">Image URL</button>
+            <button class="tab-btn" onclick="switchTab('file')">File Upload</button>
+        </div>
+
+        <!-- URL Tab -->
+        <div id="url-tab" class="tab-content active">
+            <form onsubmit="submitURL(event)">
+                <div class="form-group">
+                    <label for="imageUrl">Image URL</label>
+                    <input 
+                        type="text" 
+                        id="imageUrl" 
+                        placeholder="https://example.com/image.jpg"
+                        value="https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/doc/imgs_en/img_12.jpg"
+                    >
+                </div>
+                <button type="submit" id="urlBtn">Run OCR</button>
+            </form>
+        </div>
+
+        <!-- File Upload Tab -->
+        <div id="file-tab" class="tab-content">
+            <form onsubmit="submitFile(event)">
+                <div class="form-group">
+                    <label for="imageFile">Select Image</label>
+                    <input type="file" id="imageFile" accept="image/*">
+                </div>
+                <button type="submit" id="fileBtn">Run OCR</button>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #666;">Processing image...</p>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            // Update buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            
+            // Clear result
+            document.getElementById('result').classList.remove('show');
+        }
+
+        async function submitURL(e) {
+            e.preventDefault();
+            const url = document.getElementById('imageUrl').value;
+            const btn = document.getElementById('urlBtn');
+            
+            if (!url) {
+                showResult('error', 'Please enter an image URL');
+                return;
+            }
+
+            btn.disabled = true;
+            showLoading(true);
+            
+            try {
+                const formData = new FormData();
+                formData.append('file_url', url);
+                
+                const response = await fetch('/ocr', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('success', data);
+                } else {
+                    showResult('error', data);
+                }
+            } catch (error) {
+                showResult('error', { error: error.message });
+            } finally {
+                btn.disabled = false;
+                showLoading(false);
+            }
+        }
+
+        async function submitFile(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('imageFile');
+            const btn = document.getElementById('fileBtn');
+            
+            if (!fileInput.files[0]) {
+                showResult('error', 'Please select an image file');
+                return;
+            }
+
+            btn.disabled = true;
+            showLoading(true);
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                
+                const response = await fetch('/ocr', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('success', data);
+                } else {
+                    showResult('error', data);
+                }
+            } catch (error) {
+                showResult('error', { error: error.message });
+            } finally {
+                btn.disabled = false;
+                showLoading(false);
+            }
+        }
+
+        function showResult(type, data) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = type;
+            resultDiv.classList.add('show');
+            
+            if (type === 'success') {
+                resultDiv.innerHTML = `
+                    <div class="result-header">✅ OCR Results</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="result-header">❌ Error</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            }
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.classList.add('show');
+            } else {
+                loading.classList.remove('show');
+            }
+        }
+    </script>
+</body>
+</html>
