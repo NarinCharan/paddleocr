@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import FileResponse
 from paddleocr import PaddleOCR
 import requests
 from typing import Optional
@@ -18,8 +19,16 @@ async def root():
     return {
         "message": "PaddleOCR API is running",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
+        "test": "/test"
     }
+
+@app.get("/test")
+async def test_page():
+    """
+    Serve the test HTML page
+    """
+    return FileResponse("test.html")
 
 @app.post("/ocr")
 async def run_ocr(
